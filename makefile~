@@ -1,0 +1,36 @@
+#OBJECTS = lesinputModule.o calculate.o mathTricks.o gaussMod.o  spesialCalculate.o printMod.o rammeanalyse.o
+ 
+# gfortran lesinputModule2.f90 mathTricks.f90 calculate2.f90 gaussMod.f90 spesialCalculate2.f90 printMod.f90  rammeanalyse2.f90 -o program
+
+#FFLAGS = -g
+
+#FC = gfortran
+#FC = f90
+
+# regel .f90 før .o
+#.SUFFIXES: .f90 .o
+#.f90.o:
+#	$(FC) -c $<
+
+all: program
+
+# Husk at det skal være "tab" foran $(FC)
+#proggram: avhengig av objectene
+	# hvordan lage det
+
+
+program: lesinputModule.o calculate.o mathTricks.o gaussMod.o  spesialCalculate.o printMod.o rammeanalyse.o
+	gfortran lesinputModule.o calculate.o mathTricks.o gaussMod.o  spesialCalculate.o printMod.o rammeanalyse.o -o program -lm
+
+#all: ${OBJECTS}
+#	$(FC) ${OBJECTS} -o program -lm
+
+#calculate2.o: mathTricks.o gaussMod.o rammeanalyse2.o
+#	echo "compiling2"
+#	$(FC) ${matrixTricks.o gaussMod.o} -o calculate2.o -lm
+
+clean:
+	rm program *.o *.mod *.Mod 
+
+distclean: clean 
+	rm program *.o *.mod *.Mod *~ *.orig

@@ -1,0 +1,163 @@
+!!---------RAMMEANALYSE-------------------------------------------------------
+program rammeanalyse
+
+	
+	USE lesinputModule
+	USE calculate
+	USE spesialCalculate
+	USE mathTricks
+	USE gaussMod
+	USE printMod
+		
+	! The USE statement *** MUST *** appear at the beginning of the declaration part of the program unit making use of the module!!
+	! It must appear EVEN BEFORE the statement IMPLICIT NONE! 
+ 
+	IMPLICIT NONE ! alle program må starte med implicit none
+    ! Skriv inn filen du vil kjøre rammeanalysen på
+    
+    ! verdier som kommer fra inputfilen
+    REAL ,ALLOCATABLE, DIMENSION(:,:) :: knutePunkt 
+	INTEGER ,ALLOCATABLE, DIMENSION(:,:) :: element 
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: punktLast 
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: fordeltLast
+	REAL ,ALLOCATABLE, DIMENSION(:,:) :: Ymoment 
+	REAL ,ALLOCATABLE, DIMENSION(:,:) :: pipeProfil 
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: IPE_beam 
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: materiale
+	INTEGER :: nKnutePunkt, nElement, nPunktLast, nFordeltLast, nYmoment, nPipeProfil, nIPE_beam, nMateriale
+	
+	! verdier som kommer fra utregninger med funksjoner
+	REAL ,ALLOCATABLE ,DIMENSION(:) :: elementlengder
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: elementStivhet
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: K
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: fiMoment
+	REAL ,ALLOCATABLE ,DIMENSION(:) :: R
+	REAL, ALLOCATABLE, DIMENSION(:,:) :: AugM
+	REAL ,ALLOCATABLE ,DIMENSION(:) :: rotasjon
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: Mrot
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: Mtot
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: Q
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: Mmidt
+	REAL ,ALLOCATABLE ,DIMENSION(:,:) :: spenninger
+	
+	
+	REAL :: flytespenning
+	REAL, ALLOCATABLE, DIMENSION(:,:) :: prosentforhold
+	
+	INTEGER :: i ! midlertidig
+    
+    
+!! ------Leser input-data----------------------------------------------------
+    Call lesinput(nKnutePunkt, knutePunkt, nElement, element, nPunktLast, punktLast, nFordeltLast, fordeltLast, &
+	nYmoment, Ymoment, nPipeProfil, pipeProfil, nIPE_beam, IPE_beam, nMateriale, materiale)
+
+!! ------Regner lengder til elementene---------------------------------------   
+    elementlengder = lengder(knutePunkt,element, nElement)
+
+!! ------Regner stivhet EI til elementene------------------------------------
+    elementStivhet = finnElementStivhet(element, nElement, pipeProfil, IPE_beam, materiale)
+    !stivhetsmatrise(element, nElement, knutePunkt, nKnutePunkt, elementLengder, elementStivhet)
+
+	WRITE(*,*) 'elementStivhet(2,:)' , elementStivhet(2,:)
+
+
+    !       Testing av oppgave c
+    !   elementStivhet(2,1:2) = 2*elementStivhet(1,1:2)        
+
+!!  -----Setter opp systemstivhetsmatrisen----------------------------------
+    K = stivhetsmatrise(element, nElement, knutePunkt, nKnutePunkt, elementLengder, elementStivhet)
+    
+
+!!  -------Fastinnspenningsmomentene------------------------------------------
+    fiMoment = finnFiMoment(element, nElement, punktLast, npunktlast, fordeltLast, nfordeltlast, elementlengder)
+!   fiMoment="fastInnspenningsMoment"
+!   fiMoment(nElement,2)
+!!  -------Setter opp lastvektor----------------------------------------------
+
+    R = lastvektor(fiMoment, Ymoment, nYmoment, element, nElement, knutePunkt, nKnutePunkt)
+       
+!! ---------Finner Rotasjoner---------------------------------------
+!   Innfører randbetingelser og løser ligningen K*rot=R
+
+! --------Innfører randbetingelser-------
+	call useRandBetingelser(K,R, knutePunkt, nknutePunkt)
+	
+		 
+	!----------Lager Augmented Matrix---------
+	!(slår sammen k(systemStivhetsmatrisen)og R(lastvektoren). slik at jeg av denne kan regne ut  rot( rotasjons"vektoren")
+	AugM = makeAugmentedMatrix(K, R, nKnutePunkt) ! K(:,:) og b(:)
+	
+	!write(*,*) 'augM', AugM(:,:)
+	
+	! -------Løser ligningssytemet--------
+	!gaus seidel
+	!rot=K/b
+	!rot=GAUSSElIMINATION(AugM, nelem)
+	!rot = gaussSeidel(rot)
+	
+	call rowReduce(AugM, nKnutePunkt)
+	
+	!DO i=1,nElement
+	!	write(*,*) 'augM 2', AugM(i,:)
+	!ENDDO
+	
+	
+	rotasjon = backSub(AugM,nKnutePunkt)
+
+!! -------Løser Ligningen --------------------------
+    Mrot = finnEndemoment(rotasjon, elementStivhet, elementlengder, element, nElement) ! Mrot(nElement,2)
+
+!! -------Finner total endemoment for hver bjelke---------------------------
+    Mtot = Mrot + fiMoment
+
+!! -------Finner skjærkrefter ved bjelkeender--------------------------------
+
+   Q = finnSkjaerKraft(Mtot, punktLast, fordeltLast, elementlengder, nElement, npunktlast, nfordeltlast)
+
+!! -------Finner midtmoment for belastede element----------------------------
+    Mmidt = midtmoment(Mtot, punktLast, fordeltLast, element, elementlengder, nElement ,nPunktLast , nFordeltLast)
+
+!! -------Finner bøyespenninger ved alle ender og ved utsatte knutePunkt
+    spenninger = boyespenning(Mtot,Mmidt,elementStivhet, nElement)
+    !spenninger(nElement,3)
+
+!! Print stuff
+	
+	call skrivTilfil(rotasjon, Mtot, Mmidt, Q, spenninger, materiale, nElement, AugM)
+	
+!-------Skriver ut hva rotasjonen ble i de forskjellige nodene-------------
+    WRITE(*,*)("Rotasjonene til knutepunktene")
+    WRITE(*,*)("     Theta")
+    WRITE(*,*)(rotasjon)
+
+!------Skriver ut hva endemomentene ble for alle elementene----------------
+    WRITE(*,*)("Endemomenter [kNm]")
+    WRITE(*,*)("   [KP1        KP2]")
+    WRITE(*,*)((Mtot))
+
+!------Skriver ut moment på midten (eventuelt der det virker punktLast)----
+    WRITE(*,*)("Momenter ved utsatte knutePunkt")
+    WRITE(*,*)("[avstandKP1 (Moment ved utsatt punkt)]")
+    WRITE(*,*)((Mmidt))
+
+!------Skriver ut skjærkreftene--------------------------------------------
+    WRITE(*,*)("Skjærkrefter [kNm]")
+    WRITE(*,*)("   [Q12        Q21]")
+    WRITE(*,*)((Q))
+
+!------Skriver ut spenningene på hvert element-----------------------------
+    WRITE(*,*)("Boeyespenninger[MPa]")
+    WRITE(*,*)("  [KP1        Midten      KP2]")
+    WRITE(*,*)((spenninger))
+    
+
+    ! regner ut prosentvis
+    ! henter ut flytespenning fra den inleste filen. I oppgaven er den gitt til 355GPa
+    flytespenning= materiale(1,2)
+    prosentForhold = (spenninger/flytespenning)*100
+    !spenninger(nElement,3)
+    !flytespenning= materiale(1,2)
+    WRITE(*,*)("Boyespenninger relativt til flytspenning i prosent")
+    WRITE(*,*)("  [KP1  Midten  KP2]")
+    WRITE(*,*)(abs(prosentForhold))
+END PROGRAM      

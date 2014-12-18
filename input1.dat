@@ -1,0 +1,26 @@
+[nKnutePunkt, nElement, nPunktLast, nFordelteLaster, nYmoment, nPipeProfile, nIPE_beam, nMateriale]
+6,6,1,0,0,1,1,1
+[xPosisjon, yPosisjon, constraint(0=fri rotasjon, 1=fast Innspent)] -KnutePunktMatrise
+0,0,1
+0,9000,0
+6000,9000,0
+9000,9000,0
+9000,6000,0
+9000,0,1
+[KnutePunktnr for lokal ende 1, KnutePunktnr for lokal ende 2, I(Annet arealMoment[(mm)⁴]),Areal[mm²], E-modul[Pa=N/(mm)²]] - ElementMatrise
+1,2,1,1,1
+2,3,1,1,1
+3,4,1,1,1
+3,5,2,1,1
+4,5,1,1,1
+5,6,1,1,1
+[ElementNrBjelke, forceValue, avstand til LokalEnde1]-punktLast
+3,2000,-4000
+[ElementNrBjelke, q1, q2]-fordeltLast
+[ElementNrBjelke, ytre moment]-Ymoment
+[ytre diameter, tykkelse]-PipeProfile
+350,15
+[høyde på steg, tykkelse på flens, bredde på steg, bredde på flens]-IPE_beam
+450 ,14.6 ,9.4 ,190
+[E-modul, Flytespenning]-materiale
+300 350
